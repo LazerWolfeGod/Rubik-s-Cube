@@ -143,28 +143,37 @@ class Render_3D:
             
     def cubecameracontroller(self):
         precam = self.camera[:]
-        speed = 3
+        speed = 6
         kprs = pygame.key.get_pressed()
         rel = pygame.mouse.get_rel()
         mprs = pygame.mouse.get_pressed()
 
-        if kprs[pygame.K_w]:
-            self.camera[2]+=speed*math.cos(self.camera[4])
-            self.camera[0]+=speed*math.sin(self.camera[4])
-        elif kprs[pygame.K_s]:
-            self.camera[2]-=speed*math.cos(self.camera[4])
-            self.camera[0]-=speed*math.sin(self.camera[4])
-        if kprs[pygame.K_a]:
-            self.camera[2]+=speed*math.cos(self.camera[4]-math.pi/2)
-            self.camera[0]+=speed*math.sin(self.camera[4]-math.pi/2)
-        elif kprs[pygame.K_d]:
-            self.camera[2]+=speed*math.cos(self.camera[4]+math.pi/2)
-            self.camera[0]+=speed*math.sin(self.camera[4]+math.pi/2)
-        if kprs[pygame.K_SPACE]: self.camera[1]-=5
-        elif kprs[pygame.K_LSHIFT]: self.camera[1]+=5
+        # Up down left right
+        inpu = [0,0,0,0]
+        inpu[0]+=int(kprs[pygame.K_SPACE] or kprs[pygame.K_w])
+        inpu[1]+=int(kprs[pygame.K_LSHIFT] or kprs[pygame.K_s])
+        inpu[2]+=int(kprs[pygame.K_a])
+        inpu[3]+=int(kprs[pygame.K_d])
+        
+        self.camera[2]+=speed*math.cos(self.camera[4]-math.pi/2)*math.cos(self.camera[3])*inpu[2]
+        self.camera[0]+=speed*math.sin(self.camera[4]-math.pi/2)*math.cos(self.camera[3])*inpu[2]
+            
+        self.camera[2]+=speed*math.cos(self.camera[4]+math.pi/2)*math.cos(self.camera[3])*inpu[3]
+        self.camera[0]+=speed*math.sin(self.camera[4]+math.pi/2)*math.cos(self.camera[3])*inpu[3]
+
+        self.camera[1]-=5*inpu[0]
+        self.camera[1]+=5*inpu[1]
 
         
         
+        self.camera[3] = math.atan2(self.camera[1],((self.camera[0]**2+self.camera[2]**2)**0.5))
+        self.camera[4] = math.atan2(self.camera[0],self.camera[2])-math.pi
+
+        distance = 350/self.pythag3d((0,0,0),self.camera)
+        self.camera[0]*=distance
+        self.camera[1]*=distance
+        self.camera[2]*=distance
+    
         if self.camera!=precam:
             self.refreshdisplay()
 
@@ -306,9 +315,9 @@ class Cube:
                     [[-1,-1,-1,-1,(4,1,1),-1],[-1,-1,-1,-1,-1,-1],[-1,-1,(2,1,1),-1,-1,-1]],
                     [[-1,(1,1,0),-1,-1,(4,1,2),-1],[-1,(1,1,1),-1,-1,-1,-1],[-1,(1,1,2),(2,1,0),-1,-1,-1]]],
                    
-                   [[[(5,2,2),-1,-1,(3,2,2),(4,2,0),-1],[(5,2,1),-1,-1,(3,2,1),-1,-1],[(5,2,0),-1,(2,2,2),(3,2,0),-1,-1]],
-                    [[(5,1,2),-1,-1,-1,(4,2,1),-1],[(5,1,1),-1,-1,-1,-1,-1],[(5,1,0),-1,(2,2,1),-1,-1,-1]],
-                    [[(5,0,2),(1,2,0),-1,-1,(4,2,2),-1],[(5,0,1),(1,2,1),-1,-1,-1,-1],[(5,0,2),(1,2,2),(2,2,0),-1,-1,-1]]]]
+                   [[[(5,2,0),-1,-1,(3,2,2),(4,2,0),-1],[(5,2,1),-1,-1,(3,2,1),-1,-1],[(5,2,2),-1,(2,2,2),(3,2,0),-1,-1]],
+                    [[(5,1,0),-1,-1,-1,(4,2,1),-1],[(5,1,1),-1,-1,-1,-1,-1],[(5,1,0),-1,(2,2,2),-1,-1,-1]],
+                    [[(5,0,0),(1,2,0),-1,-1,(4,2,2),-1],[(5,0,1),(1,2,1),-1,-1,-1,-1],[(5,0,2),(1,2,2),(2,2,0),-1,-1,-1]]]]
         
         cols = [self.colkey[5],self.colkey[1],self.colkey[2],self.colkey[3],self.colkey[4],self.colkey[0]]
  
@@ -324,7 +333,7 @@ class Cube:
                     self.renderer.makecube(posx-(x-1)*sides,posy-(y-1)*sides,posz-(z-1)*sides,sides,cols)
 
     def update(self,screen):
-        self.renderer.cameracontroller()
+        self.renderer.cubecameracontroller()
         self.renderer.drawmesh(screen)
 
     
