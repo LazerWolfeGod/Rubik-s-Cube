@@ -53,16 +53,19 @@ class Render_3D:
         return [x3,y3,z3]
         
     def refreshdisplay(self):
-        for a in range(len(self.mesh)):
-            self.mesh[a][3] = self.avpoint(self.mesh[a][1])
-            self.mesh[a][2] = self.pythag3d(self.camera,self.mesh[a][3]) #min([self.pythag3d(self.camera,p) for p in self.mesh[a][1]])
-            self.mesh[a][4] = self.lightcalc(self.mesh[a][1])
-        self.mesh.sort(key=lambda x: x[2],reverse=True)
+        for mesh in self.mesh:
+            for a in range(len(mesh)):
+                mesh[a][3] = self.avpoint(mesh[a][1])
+                if mesh[a][2]<100000000: mesh[a][2] = self.pythag3d(self.camera,mesh[a][3])
+                mesh[a][4] = self.lightcalc(mesh[a][1])
+            mesh.sort(key=lambda x: x[2],reverse=True)
+        self.mesh.sort(key=lambda x: self.pythag3d(self.camera,self.avpoint([m[3] for m in x])),reverse=True)
         self.projected = []
-        for a in self.mesh:
-            poly = self.projectpoly(a)
-            if poly[2]>40 and self.getclockwise(poly):
-                self.projected.append(self.projectpoly(a))
+        for b in self.mesh:
+            for a in b:
+                poly = self.projectpoly(a)
+                if poly[2]>40 and self.getclockwise(poly):
+                    self.projected.append(self.projectpoly(a))
     def refreshselected(self):
         self.selected = -1
         for a in range(len(self.projected)):
@@ -72,6 +75,7 @@ class Render_3D:
     def pythag3d(self,p1,p2):
         return ((p1[0]-p2[0])**2+(p1[1]-p2[1])**2+(p1[2]-p2[2])**2)**0.5
     def avpoint(self,points):
+        if len(points) == 0: return (0,0,0)
         tot = [0,0,0]
         for a in points:
             tot[0]+=a[0]
@@ -216,7 +220,7 @@ class Render_3D:
 
     def drawmesh(self,screen):
         for a in self.projected:
-            pygame.draw.polygon(screen,a[0],a[1])
+            pyui.draw.polygon(screen,a[0],a[1])
         if self.selected!=-1:
             pygame.draw.polygon(screen,(255,255,255),self.projected[self.selected][1],4)
 
@@ -265,9 +269,9 @@ class Render_3D:
                 mesh.append([bordercol,[corners[a[0]],corners[a[1]],corners[a[2]]]])
 
         for a in range(len(mesh)):
-            mesh[a] = [mesh[a][0],[self.rotatepoint(b,[0,0,0]+list(angles)) for b in mesh[a][1]]]
+            mesh[a] = [mesh[a][0],[self.rotatepoint(b,[0,0,0]+list(angles)) for b in mesh[a][1]],float('inf')]
                 
-        self.mesh+=self.polypreprocess(mesh)
+        self.mesh.append(self.polypreprocess(mesh))
         if refresh:
             self.refreshdisplay()
         
@@ -284,7 +288,7 @@ class Cube:
         self.colkey = {0:(255,255,255),1:(0,200,0),2:(255,0,0),3:(0,0,255),4:(255,107,0),5:(255,242,0)}
         self.n = n
         self.reset(False)
-        self.animation = ['',0]
+        self.animation = ['',0,False]
         self.animationlength = 15
 
         self.movemap = {'U':self.makemovemapinner(0)+self.makemovemapouter([(1,'u',True),(4,'u',True),(3,'u',True),(2,'u',True)]),
@@ -340,6 +344,7 @@ class Cube:
         
     def reset(self,update=True):
         self.cube = {s:[[s for x in range(self.n)] for y in range(self.n)] for s in range(6)}
+        self.undo = []
         if update:
             self.resetcamera()
             self.genmesh()
@@ -397,6 +402,7 @@ class Cube:
 
 ### Moving cube functions ###
     def move(self,move,update=True):
+        if not self.animation[2]: self.undo.append(move)
         for cycle in self.movemap[move]:
             storeprev = self.getat(cycle[-1])
             for loc in cycle:
@@ -405,15 +411,23 @@ class Cube:
                 storeprev = store
         if update:
             self.genmesh()
-    def slowmove(self,move):
-        self.animation = [move,0]
+    def slowmove(self,move,undo=False):
+        if self.animation[1]<1 and self.animation[0]!='':
+            self.move(self.animation[0])
+        self.animation = [move,0,undo]
+    def undomove(self):
+        if len(self.undo)>0:
+            move = self.undo.pop(-1)
+            if len(move) == 1: move = move+"'"
+            elif move[1] == "'": move = move[0]
+            self.slowmove(move,True)
     def animate(self):
         if self.animation[0] != '':
             if '2' in self.animation[0]: self.animation[1]+=ui.deltatime/self.animationlength/2
             else: self.animation[1]+=ui.deltatime/self.animationlength
             if self.animation[1]>1:
-                self.move(self.animation[0])
-                self.animation = ['',0]
+                self.move(self.animation[0],self.animation[2])
+                self.animation = ['',0,False]
             self.genmesh()
     
     def getat(self,location):
@@ -429,6 +443,7 @@ class Cube:
         ui.IDs['scramble text'].settext(st)
         self.resetcamera()
         self.genmesh()
+        self.undo = []
 
     def makescramble(self,length=20):
         self.reset(False)
@@ -453,6 +468,13 @@ class Cube:
         if key in self.movemap:
             self.slowmove(key)
             ui.IDs['cube input'].settext()
+        elif len(key)>0:
+            if key[0] in self.movemap:
+                self.slowmove(key[0])
+                ui.IDs['cube input'].settext(key[1])
+            elif key[1] in self.movemap:
+                self.slowmove(key[1])
+                ui.IDs['cube input'].settext(key[0])
             
 ### Rendering Functions ###
     def genmesh(self,posx=0,posy=0,posz=0,sides=40):
@@ -492,12 +514,12 @@ class Cube:
 
     
 cube = Cube()
-
 ui.makebutton(10,10,'Scramble',40,cube.scramble)
 ui.makebutton(10,55,'Reset',40,cube.reset)
 ui.makebutton(10,100,'Center',40,cube.resetcamera)
 ui.maketext(155,15,'',40,ID='scramble text')
 ui.maketextbox(10,145,'',70,1,textsize=40,verticalspacing=4,command=cube.inputkey,ID='cube input',chrlimit=2)
+ui.makebutton(10,195,'Undo',40,cube.undomove)
 
 
 while not done:
