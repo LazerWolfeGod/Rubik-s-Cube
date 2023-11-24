@@ -61,11 +61,14 @@ class Render_3D:
             mesh[1].sort(key=lambda x: x[2],reverse=True)
         self.mesh.sort(key=lambda x: self.pythag3d(self.camera,self.avpoint([m[3] for m in x[1]])),reverse=True)
         self.projected = []
+        self.meshsizemap = []
         for b in self.mesh:
+            pre = len(self.projected)
             for a in b[1]:
                 poly = self.projectpoly(a)
                 if poly[2]>40 and self.getclockwise(poly):
                     self.projected.append(self.projectpoly(a))
+            self.meshsizemap.append(len(self.projected)-pre)
     def refreshselected(self):
         self.selected = -1
         for a in range(len(self.projected)):
@@ -74,12 +77,10 @@ class Render_3D:
         self.cubeselected = -1
         counter = 0
         for c in range(len(self.mesh)):
-            counter+=len(self.mesh[c][1])
+            counter+=self.meshsizemap[c]
             if counter>self.selected:
-                self.cubeselected = c
+                self.cubeselected = self.mesh[c][0]
                 break
-        if self.selected != -1:
-            print(self.cubeselected,self.mesh[self.cubeselected][0])
     def pythag3d(self,p1,p2):
         return ((p1[0]-p2[0])**2+(p1[1]-p2[1])**2+(p1[2]-p2[2])**2)**0.5
     def avpoint(self,points):
@@ -233,6 +234,8 @@ class Render_3D:
             pygame.draw.polygon(screen,(255,255,255),self.projected[self.selected][1],4)
 
     def makecube(self,x,y,z,side,angles=(0,0,0),cols=(150,150,150),border=-1,bordercol=(0,0,0),refresh=False,fillback=False,ID=-1):
+        if len(self.mesh) == 0:
+            cols = (150,150,150)
         if border == -1:
             border = int(side/10)
             
