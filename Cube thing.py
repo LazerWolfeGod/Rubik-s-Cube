@@ -1,5 +1,5 @@
 import pygame,math,random,sys,os,copy,numpy,time
-from UIpygame import PyUI as pyui
+import PyUI as pyui
 pygame.init()
 screenw = 900
 screenh = 600
@@ -54,24 +54,32 @@ class Render_3D:
         
     def refreshdisplay(self):
         for mesh in self.mesh:
-            for a in range(len(mesh)):
-                mesh[a][3] = self.avpoint(mesh[a][1])
-                if mesh[a][2]<100000000: mesh[a][2] = self.pythag3d(self.camera,mesh[a][3])
-                mesh[a][4] = self.lightcalc(mesh[a][1])
-            mesh.sort(key=lambda x: x[2],reverse=True)
-        self.mesh.sort(key=lambda x: self.pythag3d(self.camera,self.avpoint([m[3] for m in x])),reverse=True)
+            for a in range(len(mesh[1])):
+                mesh[1][a][3] = self.avpoint(mesh[1][a][1])
+                if mesh[1][a][2]<100000000: mesh[1][a][2] = self.pythag3d(self.camera,mesh[1][a][3])
+                mesh[1][a][4] = self.lightcalc(mesh[1][a][1])
+            mesh[1].sort(key=lambda x: x[2],reverse=True)
+        self.mesh.sort(key=lambda x: self.pythag3d(self.camera,self.avpoint([m[3] for m in x[1]])),reverse=True)
         self.projected = []
         for b in self.mesh:
-            for a in b:
+            for a in b[1]:
                 poly = self.projectpoly(a)
                 if poly[2]>40 and self.getclockwise(poly):
                     self.projected.append(self.projectpoly(a))
     def refreshselected(self):
         self.selected = -1
         for a in range(len(self.projected)):
-            if pyui.polycollide(ui.mpos,self.projected[a][1]):
+            if pyui.trianglecollide(ui.mpos,self.projected[a][1]):
                 self.selected = a
-        self.selected  = -1
+        self.cubeselected = -1
+        counter = 0
+        for c in range(len(self.mesh)):
+            counter+=len(self.mesh[c][1])
+            if counter>self.selected:
+                self.cubeselected = c
+                break
+        if self.selected != -1:
+            print(self.cubeselected,self.mesh[self.cubeselected][0])
     def pythag3d(self,p1,p2):
         return ((p1[0]-p2[0])**2+(p1[1]-p2[1])**2+(p1[2]-p2[2])**2)**0.5
     def avpoint(self,points):
@@ -224,7 +232,7 @@ class Render_3D:
         if self.selected!=-1:
             pygame.draw.polygon(screen,(255,255,255),self.projected[self.selected][1],4)
 
-    def makecube(self,x,y,z,side,angles=(0,0,0),cols=(150,150,150),border=-1,bordercol=(0,0,0),refresh=False,fillback=False):
+    def makecube(self,x,y,z,side,angles=(0,0,0),cols=(150,150,150),border=-1,bordercol=(0,0,0),refresh=False,fillback=False,ID=-1):
         if border == -1:
             border = int(side/10)
             
@@ -270,8 +278,8 @@ class Render_3D:
 
         for a in range(len(mesh)):
             mesh[a] = [mesh[a][0],[self.rotatepoint(b,[0,0,0]+list(angles)) for b in mesh[a][1]],float('inf')]
-                
-        self.mesh.append(self.polypreprocess(mesh))
+        if ID == -1: ID = len(self.mesh)
+        self.mesh.append([ID,self.polypreprocess(mesh)])
         if refresh:
             self.refreshdisplay()
         
@@ -538,7 +546,6 @@ while not done:
     pygame.display.flip()
     clock.tick(60)                                               
 pygame.quit() 
-
 
 
 
