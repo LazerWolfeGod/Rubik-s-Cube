@@ -1,5 +1,5 @@
 import pygame,math,random,sys,os,copy,numpy,time
-import PyUI as pyui
+from UIpygame import PyUI as pyui
 pygame.init()
 screenw = 900
 screenh = 600
@@ -54,33 +54,24 @@ class Render_3D:
         
     def refreshdisplay(self):
         for mesh in self.mesh:
-            for a in range(len(mesh[1])):
-                mesh[1][a][3] = self.avpoint(mesh[1][a][1])
-                if mesh[1][a][2]<100000000: mesh[1][a][2] = self.pythag3d(self.camera,mesh[1][a][3])
-                mesh[1][a][4] = self.lightcalc(mesh[1][a][1])
-            mesh[1].sort(key=lambda x: x[2],reverse=True)
-        self.mesh.sort(key=lambda x: self.pythag3d(self.camera,self.avpoint([m[3] for m in x[1]])),reverse=True)
+            for a in range(len(mesh)):
+                mesh[a][3] = self.avpoint(mesh[a][1])
+                if mesh[a][2]<100000000: mesh[a][2] = self.pythag3d(self.camera,mesh[a][3])
+                mesh[a][4] = self.lightcalc(mesh[a][1])
+            mesh.sort(key=lambda x: x[2],reverse=True)
+        self.mesh.sort(key=lambda x: self.pythag3d(self.camera,self.avpoint([m[3] for m in x])),reverse=True)
         self.projected = []
-        self.meshsizemap = []
         for b in self.mesh:
-            pre = len(self.projected)
-            for a in b[1]:
+            for a in b:
                 poly = self.projectpoly(a)
                 if poly[2]>40 and self.getclockwise(poly):
                     self.projected.append(self.projectpoly(a))
-            self.meshsizemap.append(len(self.projected)-pre)
     def refreshselected(self):
         self.selected = -1
         for a in range(len(self.projected)):
-            if pyui.trianglecollide(ui.mpos,self.projected[a][1]):
+            if pyui.polycollide(ui.mpos,self.projected[a][1]):
                 self.selected = a
-        self.cubeselected = -1
-        counter = 0
-        for c in range(len(self.mesh)):
-            counter+=self.meshsizemap[c]
-            if counter>self.selected:
-                self.cubeselected = self.mesh[c][0]
-                break
+        self.selected  = -1
     def pythag3d(self,p1,p2):
         return ((p1[0]-p2[0])**2+(p1[1]-p2[1])**2+(p1[2]-p2[2])**2)**0.5
     def avpoint(self,points):
@@ -233,9 +224,7 @@ class Render_3D:
         if self.selected!=-1:
             pygame.draw.polygon(screen,(255,255,255),self.projected[self.selected][1],4)
 
-    def makecube(self,x,y,z,side,angles=(0,0,0),cols=(150,150,150),border=-1,bordercol=(0,0,0),refresh=False,fillback=False,ID=-1):
-        if len(self.mesh) == 0:
-            cols = (150,150,150)
+    def makecube(self,x,y,z,side,angles=(0,0,0),cols=(150,150,150),border=-1,bordercol=(0,0,0),refresh=False,fillback=False):
         if border == -1:
             border = int(side/10)
             
@@ -281,14 +270,20 @@ class Render_3D:
 
         for a in range(len(mesh)):
             mesh[a] = [mesh[a][0],[self.rotatepoint(b,[0,0,0]+list(angles)) for b in mesh[a][1]],float('inf')]
-        if ID == -1: ID = len(self.mesh)
-        self.mesh.append([ID,self.polypreprocess(mesh)])
+                
+        self.mesh.append(self.polypreprocess(mesh))
         if refresh:
             self.refreshdisplay()
         
 
 class Cube:
-    def __init__(self,n=3):
+    def __init__(self,height=4,width=-1,depth=-1):
+        if width == -1: width = height
+        if depth == -1: depth = height
+        self.height = height
+        self.width = width
+        self.depth = depth
+        
         # 0 top white,
         # 1 front green
         # 2 right red
@@ -297,29 +292,92 @@ class Cube:
         # 5 bottom yellow
         
         self.colkey = {0:(255,255,255),1:(0,200,0),2:(255,0,0),3:(0,0,255),4:(255,107,0),5:(255,242,0)}
-        self.n = n
+        self.n = height
         self.reset(False)
         self.animation = ['',0,False]
         self.animationlength = 15
 
-        self.movemap = {'U':self.makemovemapinner(0)+self.makemovemapouter([(1,'u',True),(4,'u',True),(3,'u',True),(2,'u',True)]),
-                        'F':self.makemovemapinner(1)+self.makemovemapouter([(0,'d',False),(2,'l',False),(5,'u',True),(4,'r',True)]),
-                        'R':self.makemovemapinner(2)+self.makemovemapouter([(1,'r',True),(0,'r',True),(3,'l',False),(5,'r',True)]),
-                        'B':self.makemovemapinner(3)+self.makemovemapouter([(0,'u',True),(4,'l',False),(5,'d',False),(2,'r',True)]),
-                        'L':self.makemovemapinner(4)+self.makemovemapouter([(1,'l',False),(5,'l',False),(3,'r',True),(0,'l',False)]),
-                        'D':self.makemovemapinner(5)+self.makemovemapouter([(1,'d',False),(2,'d',False),(3,'d',False),(4,'d',False)]),
-                        'M':self.makemovemapouter([(1,'v',False),(5,'v',False),(3,'v',True),(0,'v',False)]),
-                        'E':self.makemovemapouter([(1,'h',False),(2,'h',False),(3,'h',False),(4,'h',False)]),
-                        'S':self.makemovemapouter([(0,'h',False),(2,'v',False),(5,'h',True),(4,'v',True)])}
-        self.movemap['X'] = self.movemap['R']+self.movemapflip(self.movemap['L'])+self.movemapflip(self.movemap['M'])
-        self.movemap['Y'] = self.movemap['U']+self.movemapflip(self.movemap['E'])+self.movemapflip(self.movemap['D'])
-        self.movemap['Z'] = self.movemap['F']+self.movemap['S']+self.movemapflip(self.movemap['B'])
-        self.movemap['r'] = self.movemap['R']+self.movemapflip(self.movemap['M'])
-        self.movemap['l'] = self.movemap['L']+self.movemap['M']
-        self.movemap['u'] = self.movemap['U']+self.movemapflip(self.movemap['E'])
-        self.movemap['d'] = self.movemap['D']+self.movemap['E']
-        self.movemap['b'] = self.movemap['B']+self.movemapflip(self.movemap['S'])
-        self.movemap['f'] = self.movemap['F']+self.movemap['S']
+        self.si_moves = {'R':[self.makemovemapouter([(1,'R',True,n,self.height),(0,'R',True,n,self.depth),(3,'R',False,self.width-n-1,self.height),(5,'R',True,n,self.depth)]) for n in range(self.width)],
+                         'F':[self.makemovemapouter([(0,'U',False,n,self.width),(2,'R',False,self.depth-n-1,self.height),(5,'U',True,self.depth-n-1,self.width),(4,'R',True,n,self.height)]) for n in range(self.depth)],
+                         'U':[self.makemovemapouter([(1,'U',True,n,self.width),(4,'U',True,n,self.depth),(3,'U',True,n,self.width),(2,'U',True,n,self.depth)]) for n in range(self.height)]}
+        self.si_moves['R'][0]+=self.movemapflip(self.makemovemapinner(4))
+        self.si_moves['R'][-1]+=self.makemovemapinner(2)
+        self.si_moves['F'][0]+=self.movemapflip(self.makemovemapinner(3))
+        self.si_moves['F'][-1]+=self.makemovemapinner(1)
+        self.si_moves['U'][-1]+=self.movemapflip(self.makemovemapinner(5))
+        self.si_moves['U'][0]+=self.makemovemapinner(0)
+
+        self.movemap = {'R':self.si_moves['R'][-1],'L':self.si_moves['R'][0],
+                        'F':self.si_moves['F'][-1],'B':self.si_moves['F'][0],
+                        'D':self.si_moves['U'][-1],'U':self.si_moves['U'][0],
+                        'M':[],'E':[],'S':[],'X':[],'Y':[],'Z':[]}
+
+        slices = {'L':self.width,'R':self.width,'U':self.height,'D':self.height,'F':self.depth,'B':self.depth}
+        
+        for w in [('L','R'),('B','F'),('U','U')]:
+            for n in range(1,slices[w[0]]):
+                self.movemap[str(n+1)+w[0]] = self.si_moves[w[1]][n]
+                self.movemap[str(n+1)+w[0]+'w'] = []
+                for m in self.si_moves[w[1]][:n+1]: self.movemap[str(n+1)+w[0]+'w']+=m
+        for w in [('R','R'),('F','F'),('D','U')]:
+            for n in range(1,slices[w[0]]):
+                nf = len(self.si_moves[w[1]])-n-1
+                self.movemap[str(n+1)+w[0]] = self.si_moves[w[1]][nf]
+                self.movemap[str(n+1)+w[0]+'w'] = []
+                for m in self.si_moves[w[1]][nf:]: self.movemap[str(n+1)+w[0]+'w']+=m
+
+        for a in self.movemap.keys():
+            if sum([a.count(s) for s in 'LDB']):
+                self.movemap[a] = self.movemapflip(self.movemap[a])
+            
+        for m in self.si_moves['R'][1:-1]:
+            self.movemap['M']+=self.movemapflip(m)
+        for m in self.si_moves['F'][1:-1]:
+            self.movemap['E']+=m
+        for m in self.si_moves['U'][1:-1]:
+            self.movemap['S']+=m
+            
+        for m in self.si_moves['R']:
+            self.movemap['X']+=m
+        for m in self.si_moves['F']:
+            self.movemap['Z']+=m
+        for m in self.si_moves['U']:
+            self.movemap['Y']+=m
+
+        new = {}
+        for m in self.movemap.keys():
+            if 'w' in m:
+                char = m[m.index('w')-1]
+                new[m.replace(f'{char}w',char.lower())] = self.movemap[m]
+        self.movemap.update(new)
+        new = {}
+        for m in self.movemap.keys():
+            if m[0] == '2':
+                new[m[1:]] = self.movemap[m]
+        for a in new:
+            if not a in self.movemap:
+                self.movemap[a] = new[a]
+        
+
+
+##        self.movemap = {'U':self.makemovemapinner(0)+self.makemovemapouter([(1,'u',True),(4,'u',True),(3,'u',True),(2,'u',True)]),
+##                        'F':self.makemovemapinner(1)+self.makemovemapouter([(0,'d',False),(2,'l',False),(5,'u',True),(4,'r',True)]),
+##                        'R':self.makemovemapinner(2)+self.makemovemapouter([(1,'r',True),(0,'r',True),(3,'l',False),(5,'r',True)]),
+##                        'B':self.makemovemapinner(3)+self.makemovemapouter([(0,'u',True),(4,'l',False),(5,'d',False),(2,'r',True)]),
+##                        'L':self.makemovemapinner(4)+self.makemovemapouter([(1,'l',False),(5,'l',False),(3,'r',True),(0,'l',False)]),
+##                        'D':self.makemovemapinner(5)+self.makemovemapouter([(1,'d',False),(2,'d',False),(3,'d',False),(4,'d',False)]),
+##                        'M':self.makemovemapouter([(1,'v',False),(5,'v',False),(3,'v',True),(0,'v',False)]),
+##                        'E':self.makemovemapouter([(1,'h',False),(2,'h',False),(3,'h',False),(4,'h',False)]),
+##                        'S':self.makemovemapouter([(0,'h',False),(2,'v',False),(5,'h',True),(4,'v',True)])}
+##        self.movemap['X'] = self.movemap['R']+self.movemapflip(self.movemap['L'])+self.movemapflip(self.movemap['M'])
+##        self.movemap['Y'] = self.movemap['U']+self.movemapflip(self.movemap['E'])+self.movemapflip(self.movemap['D'])
+##        self.movemap['Z'] = self.movemap['F']+self.movemap['S']+self.movemapflip(self.movemap['B'])
+##        self.movemap['r'] = self.movemap['R']+self.movemapflip(self.movemap['M'])
+##        self.movemap['l'] = self.movemap['L']+self.movemap['M']
+##        self.movemap['u'] = self.movemap['U']+self.movemapflip(self.movemap['E'])
+##        self.movemap['d'] = self.movemap['D']+self.movemap['E']
+##        self.movemap['b'] = self.movemap['B']+self.movemapflip(self.movemap['S'])
+##        self.movemap['f'] = self.movemap['F']+self.movemap['S']
         
         primes = {m+"'":self.movemapflip(copy.deepcopy(self.movemap[m])) for m in self.movemap}
         doubles = {m+"2":self.movemapdouble(copy.deepcopy(self.movemap[m])) for m in self.movemap}
@@ -337,17 +395,33 @@ class Cube:
                        [[[(5,2,0),-1,-1,(3,2,2),(4,2,0),-1],[(5,2,1),-1,-1,(3,2,1),-1,-1],[(5,2,2),-1,(2,2,2),(3,2,0),-1,-1]],
                         [[(5,1,0),-1,-1,-1,(4,2,1),-1],[(5,1,1),-1,-1,-1,-1,-1],[(5,1,2),-1,(2,2,1),-1,-1,-1]],
                         [[(5,0,0),(1,2,0),-1,-1,(4,2,2),-1],[(5,0,1),(1,2,1),-1,-1,-1,-1],[(5,0,2),(1,2,2),(2,2,0),-1,-1,-1]]]]
+        self.decoder = [[[[-1 for a in range(6)] for x in range(self.width)] for z in range(self.depth)] for y in range(self.height)]
+        self.implantdecoder(0,-1,-1,0,False,False)
+        self.implantdecoder(1,-1,self.depth-1,-1,False,False)
+        self.implantdecoder(2,self.width-1,-1,-1,True,False)
+        self.implantdecoder(3,-1,0,-1,True,False)
+        self.implantdecoder(4,0,-1,-1,False,False)
+        self.implantdecoder(5,-1,-1,self.height-1,False,True)
+        
+            
         self.makeeffectedmap()
 
-        self.anglemap = {'U':(0,1,0),'F':(0,0,-1),'R':(-1,0,0),
+        simpleanglemap = {'U':(0,1,0),'F':(0,0,-1),'R':(-1,0,0),
                          'B':(0,0,1),'L':(1,0,0),'D':(0,-1,0),
-                         'u':(0,1,0),'f':(0,0,-1),'r':(-1,0,0),
-                         'b':(0,0,1),'l':(1,0,0),'d':(0,-1,0),
                          'M':(1,0,0),'E':(0,1,0),'S':(0,0,-1),
                          'X':(-1,0,0),'Y':(0,1,0),'Z':(0,0,-1)}
-        primes = {m+"'":(self.anglemap[m][0]*-1,self.anglemap[m][1]*-1,self.anglemap[m][2]*-1) for m in self.anglemap}
-        self.anglemap.update({m+"2":(self.anglemap[m][0]*2,self.anglemap[m][1]*2,self.anglemap[m][2]*2) for m in self.anglemap})
-        self.anglemap.update(primes)
+        self.anglemap = {}
+        for m in self.movemap.keys():
+            for c in m:
+                if c.upper() in simpleanglemap:
+                    self.anglemap[m] = simpleanglemap[c.upper()]
+                    if m[-1] == "'": self.anglemap[m] = (self.anglemap[m][0]*-1,self.anglemap[m][1]*-1,self.anglemap[m][2]*-1)
+                    elif m[-1] == "2": self.anglemap[m] = (self.anglemap[m][0]*2,self.anglemap[m][1]*2,self.anglemap[m][2]*2)
+                    break
+        
+##        primes = {m+"'":(self.anglemap[m][0]*-1,self.anglemap[m][1]*-1,self.anglemap[m][2]*-1) for m in self.anglemap}
+##        self.anglemap.update({m+"2":(self.anglemap[m][0]*2,self.anglemap[m][1]*2,self.anglemap[m][2]*2) for m in self.anglemap})
+##        self.anglemap.update(primes)
         
         self.renderer = Render_3D()
         self.resetcamera()
@@ -364,11 +438,34 @@ class Cube:
         
 ### Move map functions ###                    
     def makemovemapinner(self,face):
-        return [[(face,0,0),(face,0,2),(face,2,2),(face,2,0)],[(face,0,1),(face,1,2),(face,2,1),(face,1,0)],[(face,1,1),(face,1,1)]]
+        base = [[(face,y,x) for x in range(self.n)] for y in range(self.n)]
+        reverse = [[(face,y,self.n-x-1) for x in range(self.n)] for y in range(self.n)]
+        rotated = [[reverse[x][y] for x in range(len(reverse[y]))] for y in range(len(reverse))]
+
+        loops = []
+        marked = []
+        for y in range(len(rotated)):
+            for x in range(len(rotated)):
+                moving = rotated[y][x]
+                if not(y == moving[1] and x == moving[2]):
+                    loops.append([])
+                    while not (moving in marked):
+                        marked.append(moving)
+                        loops[-1].append(moving)
+                        moving = rotated[moving[1]][moving[2]]
+                    if loops[-1] == []: del loops[-1]
+                else:
+                    loops.append([moving,moving])
+        return loops
+##        return [[(face,0,0),(face,0,2),(face,2,2),(face,2,0)],[(face,0,1),(face,1,2),(face,2,1),(face,1,0)],[(face,1,1),(face,1,1)]]
+    
     def makemovemapouter(self,sides):
         info = []
         for s in sides:
-            if s[1] == 'r': new=[(s[0],0,2),(s[0],1,2),(s[0],2,2)]
+            if s[1] == 'R': new = [(s[0],n,s[3]) for n in range(s[4])]
+            elif s[1] == 'U': new = [(s[0],s[3],n) for n in range(s[4])]
+            
+            elif s[1] == 'r': new=[(s[0],0,2),(s[0],1,2),(s[0],2,2)]
             elif s[1] == 'l': new=[(s[0],0,0),(s[0],1,0),(s[0],2,0)]
             elif s[1] == 'u': new=[(s[0],0,0),(s[0],0,1),(s[0],0,2)]
             elif s[1] == 'd': new=[(s[0],2,0),(s[0],2,1),(s[0],2,2)]
@@ -394,22 +491,50 @@ class Cube:
             nmoves.append([a for i,a in enumerate(b) if i%2==0])
             nmoves.append([a for i,a in enumerate(b) if i%2==1])
         return nmoves
+    def implantdecoder(self,face,xmov,zmov,ymov,flipx,flipy):
+        if face in [0,5]: area,mod = self.depth*self.width,self.width
+        elif face in [1,3]: area,mod = self.height*self.width,self.width
+        elif face in [2,4]: area,mod = self.depth*self.height,self.depth
+        data = [[face,n//mod,n%mod] for n in range(area)]
+        for a in data:
+            if flipy: a[1] = mod-a[1]-1
+            if flipx: a[2] = mod-a[2]-1
+
+        if xmov == -1: xr = range(0,self.width)
+        else: xr = range(xmov,xmov+1)
+        if ymov == -1: yr = range(0,self.height)
+        else: yr = range(ymov,ymov+1)
+        if zmov == -1: zr = range(0,self.depth)
+        else: zr = range(zmov,zmov+1)
+        index = 0
+
+        for y in yr:
+            for z in zr:
+                for x in xr:
+                    f = data[index][0]
+                    if f == 0: f = 5
+                    elif f == 5: f = 0
+                    self.decoder[y][z][x][f] = data[index]
+                    index+=1
+        
+        
     ## generate
     def makeeffectedmap(self):
         self.effectmap = []
-        for y in range(self.n):
+        for y in range(len(self.decoder)):
             self.effectmap.append([])
-            for z in range(self.n):
+            for z in range(len(self.decoder[y])):
                 self.effectmap[-1].append([])
-                for x in range(self.n):
+                for x in range(len(self.decoder[y][z])):
                     self.effectmap[-1][-1].append([])
                     for m in self.movemap:
                         sides = []
                         for s in self.movemap[m]: sides+=s
                         for d in self.decoder[y][z][x]:
-                            if d in sides:
+                            if d!=-1 and tuple(d) in sides:
                                 self.effectmap[y][z][x].append(m)
                                 break
+                            
 
 ### Moving cube functions ###
     def move(self,move,update=True):
@@ -434,7 +559,7 @@ class Cube:
             self.slowmove(move,True)
     def animate(self):
         if self.animation[0] != '':
-            if '2' in self.animation[0]: self.animation[1]+=ui.deltatime/self.animationlength/2
+            if self.animation[0][-1] == '2': self.animation[1]+=ui.deltatime/self.animationlength/2
             else: self.animation[1]+=ui.deltatime/self.animationlength
             if self.animation[1]>1:
                 self.move(self.animation[0],self.animation[2])
@@ -456,10 +581,24 @@ class Cube:
         self.genmesh()
         self.undo = []
 
-    def makescramble(self,length=20):
+    def makescramble(self):
+        lengthkey = [0,0,11,20,45,60,80,100]
+        length = lengthkey[self.n]
         self.reset(False)
-        basics = ['R','L','U','F','D','B']
+        if self.n == 2: basics = ['R','U','F']
+        else: basics = ['R','L','U','F','D','B']
         moves = [a for a in self.movemap if a[0] in basics]
+        trim = []
+        if self.n == 4: trim = ['Dw','Lw','Bw']
+        elif self.n == 6: trim = ['3Dw','3Lw','3Bw']
+        torem = []
+        for a in moves:
+            for t in trim:
+                if t in a:
+                    torem.append(a)
+        for a in torem:
+            moves.remove(a)
+        
         scramble = []
         for a in range(length):
             move = random.choice(moves)
@@ -467,6 +606,7 @@ class Cube:
                 move = random.choice(moves)
             scramble.append(move)
         return scramble
+    
     def output(self):
         for s in self.cube:
             print(f'-- {s} --')
@@ -479,25 +619,26 @@ class Cube:
         if key in self.movemap:
             self.slowmove(key)
             ui.IDs['cube input'].settext()
-        elif len(key)>0:
-            if key[0] in self.movemap:
-                self.slowmove(key[0])
-                ui.IDs['cube input'].settext(key[1])
-            elif key[1] in self.movemap:
-                self.slowmove(key[1])
-                ui.IDs['cube input'].settext(key[0])
+##        elif len(key)>0:
+##            if key[0] in self.movemap:
+##                self.slowmove(key[0])
+##                ui.IDs['cube input'].settext(key[1])
+##            elif len(key)>1 and key[1] in self.movemap:
+##                self.slowmove(key[1])
+##                ui.IDs['cube input'].settext(key[0])
             
 ### Rendering Functions ###
-    def genmesh(self,posx=0,posy=0,posz=0,sides=40):
+    def genmesh(self,posx=0,posy=0,posz=0):
+        sides = 40*3/max([self.width,self.height,self.depth])*(ui.dirscale[1]**0.6)
+        border = 0
+        if self.n<=4: border = -1
         self.renderer.mesh = []
         
         cols = [self.colkey[5],self.colkey[1],self.colkey[2],self.colkey[3],self.colkey[4],self.colkey[0]]
 
-##        self.renderer.makecube(50,0,0,100,[0,0,0],[(random.randint(0,255),random.randint(0,255),random.randint(0,255)) for a in range(12)],border=0)
-##        self.renderer.makecube(-50,0,0,100,[0,0,0],[(random.randint(0,255),random.randint(0,255),random.randint(0,255)) for a in range(12)],border=0)
         drawbackkey = {0:[2,4],1:[0,5],2:[1,3]}
-##        anglecenter = 
-        if self.animation[0]!='': angleffect = self.anglemap[self.animation[0]]
+        if self.animation[0]!='':
+            angleffect = self.anglemap[self.animation[0]]
         else: angleffect = (0,0,0)
         for y in range(len(self.decoder)):
             for z in range(len(self.decoder[y])):
@@ -515,7 +656,7 @@ class Cube:
                         if angleffect[a]!=0:
                             if cols[drawbackkey[a][0]] == -1: cols[drawbackkey[a][0]] = (0,0,0)
                             if cols[drawbackkey[a][1]] == -1: cols[drawbackkey[a][1]] = (0,0,0)
-                    self.renderer.makecube(posx-(x-1)*sides,posy-(y-1)*sides,posz-(z-1)*sides,sides,[angles[0]*self.animation[1]*math.pi/2,angles[1]*self.animation[1]*math.pi/2,angles[2]*self.animation[1]*math.pi/2],cols)
+                    self.renderer.makecube(posx-(x-(self.width-1)/2)*sides,posy-(y-(self.height-1)/2)*sides,posz-(z-(self.depth-1)/2)*sides,sides,[angles[0]*self.animation[1]*math.pi/2,angles[1]*self.animation[1]*math.pi/2,angles[2]*self.animation[1]*math.pi/2],cols,border)
         self.renderer.refreshdisplay()
                     
     def update(self,screen):
@@ -528,8 +669,8 @@ cube = Cube()
 ui.makebutton(10,10,'Scramble',40,cube.scramble)
 ui.makebutton(10,55,'Reset',40,cube.reset)
 ui.makebutton(10,100,'Center',40,cube.resetcamera)
-ui.maketext(155,15,'',40,ID='scramble text')
-ui.maketextbox(10,145,'',70,1,textsize=40,verticalspacing=4,command=cube.inputkey,ID='cube input',chrlimit=2)
+ui.maketext(155,15,'',30,ID='scramble text',maxwidth=700)
+ui.maketextbox(10,145,'',70,1,textsize=40,verticalspacing=4,command=cube.inputkey,ID='cube input',chrlimit=4)
 ui.makebutton(10,195,'Undo',40,cube.undomove)
 
 
@@ -539,6 +680,7 @@ while not done:
             done = True
         if event.type == pygame.VIDEORESIZE:
             cube.renderer.refreshdisplay()
+            cube.genmesh()
     
     screen.fill(pyui.Style.wallpapercol)
     cube.update(screen)
@@ -549,6 +691,7 @@ while not done:
     pygame.display.flip()
     clock.tick(60)                                               
 pygame.quit() 
+
 
 
 
