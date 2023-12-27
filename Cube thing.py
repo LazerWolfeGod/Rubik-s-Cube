@@ -277,7 +277,7 @@ class Render_3D:
         
 
 class Cube:
-    def __init__(self,height=4,width=-1,depth=-1):
+    def __init__(self,height=3,width=-1,depth=-1):
         if width == -1: width = height
         if depth == -1: depth = height
         self.height = height
@@ -292,7 +292,7 @@ class Cube:
         # 5 bottom yellow
         
         self.colkey = {0:(255,255,255),1:(0,200,0),2:(255,0,0),3:(0,0,255),4:(255,107,0),5:(255,242,0)}
-        self.n = height
+        self.n = max([height,width,depth])
         self.reset(False)
         self.animation = ['',0,False]
         self.animationlength = 15
@@ -359,25 +359,6 @@ class Cube:
                 self.movemap[a] = new[a]
         
 
-
-##        self.movemap = {'U':self.makemovemapinner(0)+self.makemovemapouter([(1,'u',True),(4,'u',True),(3,'u',True),(2,'u',True)]),
-##                        'F':self.makemovemapinner(1)+self.makemovemapouter([(0,'d',False),(2,'l',False),(5,'u',True),(4,'r',True)]),
-##                        'R':self.makemovemapinner(2)+self.makemovemapouter([(1,'r',True),(0,'r',True),(3,'l',False),(5,'r',True)]),
-##                        'B':self.makemovemapinner(3)+self.makemovemapouter([(0,'u',True),(4,'l',False),(5,'d',False),(2,'r',True)]),
-##                        'L':self.makemovemapinner(4)+self.makemovemapouter([(1,'l',False),(5,'l',False),(3,'r',True),(0,'l',False)]),
-##                        'D':self.makemovemapinner(5)+self.makemovemapouter([(1,'d',False),(2,'d',False),(3,'d',False),(4,'d',False)]),
-##                        'M':self.makemovemapouter([(1,'v',False),(5,'v',False),(3,'v',True),(0,'v',False)]),
-##                        'E':self.makemovemapouter([(1,'h',False),(2,'h',False),(3,'h',False),(4,'h',False)]),
-##                        'S':self.makemovemapouter([(0,'h',False),(2,'v',False),(5,'h',True),(4,'v',True)])}
-##        self.movemap['X'] = self.movemap['R']+self.movemapflip(self.movemap['L'])+self.movemapflip(self.movemap['M'])
-##        self.movemap['Y'] = self.movemap['U']+self.movemapflip(self.movemap['E'])+self.movemapflip(self.movemap['D'])
-##        self.movemap['Z'] = self.movemap['F']+self.movemap['S']+self.movemapflip(self.movemap['B'])
-##        self.movemap['r'] = self.movemap['R']+self.movemapflip(self.movemap['M'])
-##        self.movemap['l'] = self.movemap['L']+self.movemap['M']
-##        self.movemap['u'] = self.movemap['U']+self.movemapflip(self.movemap['E'])
-##        self.movemap['d'] = self.movemap['D']+self.movemap['E']
-##        self.movemap['b'] = self.movemap['B']+self.movemapflip(self.movemap['S'])
-##        self.movemap['f'] = self.movemap['F']+self.movemap['S']
         
         primes = {m+"'":self.movemapflip(copy.deepcopy(self.movemap[m])) for m in self.movemap}
         doubles = {m+"2":self.movemapdouble(copy.deepcopy(self.movemap[m])) for m in self.movemap}
@@ -418,11 +399,7 @@ class Cube:
                     if m[-1] == "'": self.anglemap[m] = (self.anglemap[m][0]*-1,self.anglemap[m][1]*-1,self.anglemap[m][2]*-1)
                     elif m[-1] == "2": self.anglemap[m] = (self.anglemap[m][0]*2,self.anglemap[m][1]*2,self.anglemap[m][2]*2)
                     break
-        
-##        primes = {m+"'":(self.anglemap[m][0]*-1,self.anglemap[m][1]*-1,self.anglemap[m][2]*-1) for m in self.anglemap}
-##        self.anglemap.update({m+"2":(self.anglemap[m][0]*2,self.anglemap[m][1]*2,self.anglemap[m][2]*2) for m in self.anglemap})
-##        self.anglemap.update(primes)
-        
+
         self.renderer = Render_3D()
         self.resetcamera()
         self.genmesh()
@@ -589,7 +566,8 @@ class Cube:
         else: basics = ['R','L','U','F','D','B']
         moves = [a for a in self.movemap if a[0] in basics]
         trim = []
-        if self.n == 4: trim = ['Dw','Lw','Bw']
+        if self.n < 4: trim = ['w']
+        elif self.n == 4: trim = ['Dw','Lw','Bw']
         elif self.n == 6: trim = ['3Dw','3Lw','3Bw']
         torem = []
         for a in moves:
@@ -631,7 +609,7 @@ class Cube:
     def genmesh(self,posx=0,posy=0,posz=0):
         sides = 40*3/max([self.width,self.height,self.depth])*(ui.dirscale[1]**0.6)
         border = 0
-        if self.n<=4: border = -1
+        if self.width*self.height*self.depth<225: border = -1
         self.renderer.mesh = []
         
         cols = [self.colkey[5],self.colkey[1],self.colkey[2],self.colkey[3],self.colkey[4],self.colkey[0]]
@@ -665,7 +643,7 @@ class Cube:
         self.renderer.drawmesh(screen)
 
     
-cube = Cube()
+cube = Cube(4,5,2)
 ui.makebutton(10,10,'Scramble',40,cube.scramble)
 ui.makebutton(10,55,'Reset',40,cube.reset)
 ui.makebutton(10,100,'Center',40,cube.resetcamera)
